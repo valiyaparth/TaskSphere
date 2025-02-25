@@ -15,6 +15,13 @@ namespace TaskSphere.Data
             public DbSet<Team> Teams { get; set; }
             public DbSet<Project> Projects { get; set; }
 
+            public DbSet<ProjectMember> ProjectMembers { get; set; }
+            public DbSet<ProjectTeam> ProjectTeams { get; set; }
+            public DbSet<TaskUser> TaskUsers { get; set; }
+            public DbSet<TeamMember> TeamMembers { get; set; }
+
+
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -40,6 +47,20 @@ namespace TaskSphere.Data
                 .WithMany()
                 .HasForeignKey(p=>p.CreatorId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            //enums
+            //modelBuilder.Entity<Models.Task>()
+            //.Property(t => t.Status)
+            //.HasConversion<string>();
+
+            //modelBuilder.Entity<ProjectMember>()
+            //    .Property(p => p.Role)
+            //    .HasConversion<string>();
+
+            //modelBuilder.Entity<TeamMember>()
+            //    .Property(t => t.Role)
+            //    .HasConversion<string>();
+
 
 
             //One-to-Many:

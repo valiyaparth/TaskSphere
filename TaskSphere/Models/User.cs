@@ -9,8 +9,8 @@
         public string? ImageUrl { get; set; }
 
         //navigation properties
-        public ICollection<TaskUser> Tasks { get; set; }
-        public ICollection<TeamMember> Teams { get; set; }
+        public ICollection<TaskUser>? Tasks { get; set; }
+        public ICollection<TeamMember>? Teams { get; set; }
         public ICollection<ProjectMember> Projects { get; set; }
     }
 }

@@ -1,4 +1,5 @@
-﻿using TaskSphere.Enums;
+﻿using System.Text.Json.Serialization;
+using TaskSphere.Enums;
 
 namespace TaskSphere.Models
 {
@@ -10,7 +11,7 @@ namespace TaskSphere.Models
         public Status Status { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateOnly DueDate { get; set; }
-        public DateTime UpdatedAt { get; set; } = DateTime.Now;
+        public DateTime UpdatedAt { get; set; }
         public string? ImageUrl { get; set; }
 
 

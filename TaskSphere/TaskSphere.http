@@ -1,6 +1,163 @@
-@TaskSphere_HostAddress = http://localhost:5195
+@TaskSphere_HostAddress = https://localhost:7195
 
-GET {{TaskSphere_HostAddress}}/weatherforecast/
-Accept: application/json
+
+POST {{TaskSphere_HostAddress}}/api/user
+Content-Type: application/json
+
+{
+  "name": "valiya parth",
+  "email": "valiyaparth@gmail.com",
+  "password": "Valiya@123"
+}
+
+###
+
+PUT {{TaskSphere_HostAddress}}/api/user/2
+Content-Type: application/json
+
+{
+  "name": "test",
+  "email": "test@gmail.com",
+  "password": "test@123",
+  "imageUrl": "422f4fsfihaef"
+}
+
+###
+
+DELETE {{TaskSphere_HostAddress}}/api/user/3
+
+###
+
+GET {{TaskSphere_HostAddress}}/api/project
+
+###
+
+POST {{TaskSphere_HostAddress}}/api/project
+Content-Type: application/json
+
+{
+  "name": "taskSphere",
+  "description": "task management system",
+  "imageUrl": "we984bf3uybf"
+}
+
+###
+
+DELETE {{TaskSphere_HostAddress}}/api/project/2
+
+###
+
+
+GET {{TaskSphere_HostAddress}}/api/project
+
+###
+
+PUT {{TaskSphere_HostAddress}}/api/project/4
+Content-Type: application/json
+
+{
+  "name": "bookverse",
+  "description": "online e-book store",
+  "imageurl": "pajklioen"
+}
+
+###
+
+DELETE {{TaskSphere_HostAddress}}/api/project/6
+
+###
+
+@projectId=0
+@userId=0
+POST {{TaskSphere_HostAddress}}/api/project/add-user/4/2
+
+###
+
+@id=0
+DELETE {{TaskSphere_HostAddress}}/api/project/remove-user/4/2
+
+###
+
+GET {{TaskSphere_HostAddress}}/api/task
+
+###
+
+GET {{TaskSphere_HostAddress}}/api/team
+
+###
+
+GET {{TaskSphere_HostAddress}}/api/team/2
+
+###
+
+POST {{TaskSphere_HostAddress}}/api/team
+Content-Type: application/json
+
+{
+  //Team
+}
+
+###
+
+POST {{TaskSphere_HostAddress}}/api/team
+Content-Type: application/json
+
+{
+  "name": "Holaa Coders",
+  "description": "i don know",
+  "imageUrl": "weuhfrwfjib"
+}
+
+###
+
+GET {{TaskSphere_HostAddress}}/api/team
+
+###
+
+PUT {{TaskSphere_HostAddress}}/api/team/9
+Content-Type: application/json
+
+{
+    "name": "Coder's Crew",
+    "description": "hola coders",
+    "imageUrl": "ewuywieuueuw"
+}
+
+###
+
+
+@teamId=0
+POST {{TaskSphere_HostAddress}}/api/team/add-teammember/{{teamId}}/{{userId}}
+
+###
+
+DELETE {{TaskSphere_HostAddress}}/api/team/remove-teammeber/{{teamId}}/{{userId}}
+
+###
+
+POST {{TaskSphere_HostAddress}}/api/task
+Content-Type: application/json
+
+{
+  //Task
+}
+
+###
+
+POST {{TaskSphere_HostAddress}}/api/task/add-task{{projectId}}/{{teamId}}
+Content-Type: application/json
+
+{
+  //CreateTaskDto
+}
+
+###
+
+PUT {{TaskSphere_HostAddress}}/api/task/{{id}}
+Content-Type: application/json
+
+{
+  //Task
+}
 
 ###
