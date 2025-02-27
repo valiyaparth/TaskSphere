@@ -264,7 +264,7 @@ namespace TaskSphere.Controllers
             await _unitOfWork.TeamMember.AddUserToTeamAsync(teamMember);
             await _unitOfWork.SaveAsync();
 
-            return Ok();
+            return Created();
         }
 
         //Remove user from a team

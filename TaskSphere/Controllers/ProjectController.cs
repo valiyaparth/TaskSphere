@@ -133,7 +133,7 @@ namespace TaskSphere.Controllers
                 UserId = project.CreatorId,
                 Role = Roles.Admin,
             };
-
+            // and adding the creator to project member table
             await _unitOfWork.ProjectMember.AddUserToProjectAsync(projectMember);
             await _unitOfWork.SaveAsync();
 
@@ -302,7 +302,7 @@ namespace TaskSphere.Controllers
             };
             await _unitOfWork.ProjectTeam.AddTeamToProjectAsync(projectTeam);
             await _unitOfWork.SaveAsync();
-            return Ok();
+            return Created();
         }
 
         //Remove a team from project

@@ -1,4 +1,6 @@
-﻿namespace TaskSphere.Models
+﻿using TaskSphere.Enums;
+
+namespace TaskSphere.Models
 {
     public class TaskUser
     {
@@ -9,5 +11,8 @@
         //navigation properties
         public Task Task { get; set; }
         public User User { get; set; }
+
+        //Role in the task
+        public Roles Role { get; set; }
     }
 }

@@ -4,7 +4,8 @@
     using System.Linq.Expressions;
     using System.Threading.Tasks;
     using TaskSphere.DTOs;
-    using TaskSphere.Models;
+using TaskSphere.Enums;
+using TaskSphere.Models;
     using TaskSphere.Repository.IRepository;
 
     namespace TaskSphere.Controllers
@@ -47,6 +48,12 @@
                     CreatorId = task.CreatorId,
                     TeamId = task.TeamId,
                     ProjectId = task.ProjectId,
+                    Assignee = task.Assignee.Select(assignee => new TaskUserDto
+                    {
+                        UserId = assignee.UserId,
+                        TaskId = assignee.TaskId,
+                        roles = assignee.Role
+                    }).ToList()
                 }).ToList();
 
                 return Ok(taskDtos);
@@ -79,6 +86,12 @@
                     CreatorId = task.CreatorId,
                     TeamId = task.TeamId,
                     ProjectId = task.ProjectId,
+                    Assignee = task.Assignee.Select(assignee => new TaskUserDto
+                    {
+                        UserId = assignee.UserId,
+                        TaskId = assignee.TaskId,
+                        roles = assignee.Role
+                    }).ToList()
                 };
 
                 return Ok(task);
@@ -111,7 +124,18 @@
                 await _unitOfWork.Task.AddAsync(task);
                 await _unitOfWork.SaveAsync();
 
-                var taskDto = new TaskDto
+                //making creator an admin of the task
+                var taskUser = new TaskUser
+                {
+                    TaskId = task.Id,
+                    UserId = task.CreatorId,
+                    Role = Roles.Admin
+                };
+
+                await _unitOfWork.TaskUser.AssignUserToTaskAsync(taskUser);
+                await _unitOfWork.SaveAsync();
+
+            var taskDto = new TaskDto
                 {
                     Id = task.Id,
                     Title = task.Title,
@@ -124,7 +148,13 @@
                     CreatorId = task.CreatorId,
                     TeamId = task.TeamId,
                     ProjectId = task.ProjectId,
-                };
+                    Assignee = task.Assignee.Select(assignee => new TaskUserDto
+                    {
+                        UserId = assignee.UserId,
+                        TaskId = assignee.TaskId,
+                        roles = assignee.Role
+                    }).ToList()
+            };
 
                 return CreatedAtAction(nameof(GetTaskById), new { id = task.Id }, taskDto);
             }
@@ -158,6 +188,12 @@
                     CreatorId = task.CreatorId,
                     TeamId = task.TeamId,
                     ProjectId = task.ProjectId,
+                    Assignee = task.Assignee.Select(assignee => new TaskUserDto
+                    {
+                        UserId = assignee.UserId,
+                        TaskId = assignee.TaskId,
+                        roles = assignee.Role
+                    }).ToList()
                 };
 
                 _unitOfWork.Task.Update(task);
@@ -180,5 +216,46 @@
                 return NoContent();
             }
 
+            //Add a assignee to a team
+            [HttpPost("assign-task/{taskId}/{userId}")]
+            public async Task<ActionResult> AssignTask(int taskId, int userId)
+            {
+                var task = await _unitOfWork.Task.GetAsync(t => t.Id == taskId);
+                if (task == null) return NotFound();
+
+                var user = await _unitOfWork.User.GetAsync(u => u.Id == userId);
+                if (user == null) return NotFound();
+
+                var taskUser = new TaskUser
+                {
+                    TaskId = taskId,
+                    UserId = userId,
+                    Role = Roles.Member
+                };
+                
+                await _unitOfWork.TaskUser.AssignUserToTaskAsync(taskUser);
+                await _unitOfWork.SaveAsync();
+
+                return Created();
+            }
+
+            //Remove a assignee from a task
+            [HttpDelete("remove-assignee/{taskId}/{userId}")]
+            public async Task<ActionResult> RemoveAssignee(int taskId, int userId)
+            {
+                var task = await _unitOfWork.Task.GetAsync(t => t.Id == taskId);
+                if (task == null) return NotFound("Task Not Found");
+
+                var user = await _unitOfWork.User.GetAsync(u => u.Id == userId);
+                if (user == null) return NotFound("User Not Found");
+
+                TaskUser? taskUser = await _unitOfWork.TaskUser.GetAsync(tu => tu.TaskId == taskId && tu.UserId == userId);
+                if (taskUser == null) return NotFound();
+
+                await _unitOfWork.TaskUser.RemoveUserFromTaskAsync(taskUser);
+                await _unitOfWork.SaveAsync();
+
+            return NoContent();
+            }
         }
     }

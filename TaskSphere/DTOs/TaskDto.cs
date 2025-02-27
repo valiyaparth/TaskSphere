@@ -1,4 +1,5 @@
 ﻿using TaskSphere.Enums;
+using TaskSphere.Models;
 
 namespace TaskSphere.DTOs
 {
@@ -15,6 +16,7 @@ namespace TaskSphere.DTOs
         public int CreatorId { get; set; }
         public int TeamId { get; set; }
         public int ProjectId { get; set; }
+        public List<TaskUserDto> Assignee { get; set; } = new();
     }
 
     public class GetTaskDto
@@ -23,6 +25,7 @@ namespace TaskSphere.DTOs
         public int CreatorId { get; set; }
         public int TeamId { get; set; }
         public int ProjectId { get; set; }
+        public List<TaskUserDto> Assignee { get; set; } = new();
 
     }
     public class CreateTaskDto
