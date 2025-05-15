@@ -28,7 +28,7 @@ namespace TaskSphere.Repository
 
         public async Task<IEnumerable<ProjectMember>> GetProjectMembersAsync(int projectId)
         {
-            return await _db.ProjectMembers.Where(u=>u.ProjectId == projectId).ToListAsync();
+            return await _db.ProjectMembers.Where(u=>u.ProjectId == projectId).ToListAsync() ?? new List<ProjectMember>(); ;
         }
 
         public async System.Threading.Tasks.Task RemoveUserFromProjectAsync(ProjectMember projectMember)

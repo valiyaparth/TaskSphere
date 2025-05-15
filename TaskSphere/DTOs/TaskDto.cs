@@ -10,10 +10,10 @@ namespace TaskSphere.DTOs
         public string Description { get; set; }
         public Status Status { get; set; }
         public DateTime CreatedAt { get; set; }
-        public DateOnly DueDate { get; set; }
+        public DateTime DueDate { get; set; }
         public DateTime UpdatedAt { get; set; }
         public string? ImageUrl { get; set; }
-        public int CreatorId { get; set; }
+        public string CreatorId { get; set; }
         public int TeamId { get; set; }
         public int ProjectId { get; set; }
         public List<TaskUserDto> Assignee { get; set; } = new();
@@ -22,7 +22,7 @@ namespace TaskSphere.DTOs
     public class GetTaskDto
     {
         public int Id { get; set; }
-        public int CreatorId { get; set; }
+        public string CreatorId { get; set; }
         public int TeamId { get; set; }
         public int ProjectId { get; set; }
         public List<TaskUserDto> Assignee { get; set; } = new();
@@ -33,7 +33,7 @@ namespace TaskSphere.DTOs
         public string Title { get; set; }
         public string Description { get; set; }
         public Status Status { get; set; }
-        public DateOnly DueDate { get; set; }
+        public DateTime DueDate { get; set; }
         public string? ImageUrl { get; set; }
     }
 
@@ -42,7 +42,7 @@ namespace TaskSphere.DTOs
         public string Title { get; set; }
         public string Description { get; set; }
         public Status Status { get; set; }
-        public DateOnly DueDate { get; set; }
+        public DateTime DueDate { get; set; }
         public string? ImageUrl { get; set; }
     }
 }

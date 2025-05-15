@@ -12,6 +12,8 @@
         IProjectMemberRepository ProjectMember { get; }
         IProjectTeamRepository ProjectTeam { get; }
 
+        ITokenInfoRepository TokenInfo { get; }
+
         Task SaveAsync();
     }
 }

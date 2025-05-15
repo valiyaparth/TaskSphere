@@ -27,7 +27,7 @@ namespace TaskSphere.Repository
 
         public async Task<IEnumerable<ProjectTeam>> GetProjectTeamAsync(int id)
         {
-            return await _db.ProjectTeams.Where(p => p.ProjectId == id).ToListAsync();
+            return await _db.ProjectTeams.Where(p => p.ProjectId == id).ToListAsync() ?? new List<ProjectTeam>();
         }
 
         public async System.Threading.Tasks.Task RemoveTeamFromProjectAsync(ProjectTeam projectTeam)

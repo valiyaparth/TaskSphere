@@ -1,24 +1,29 @@
-﻿    using Microsoft.AspNetCore.Http;
-    using Microsoft.AspNetCore.Http.HttpResults;
-    using Microsoft.AspNetCore.Mvc;
-    using System.Linq.Expressions;
-    using System.Threading.Tasks;
-    using TaskSphere.DTOs;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
+using System.Linq.Expressions;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using TaskSphere.DTOs;
 using TaskSphere.Enums;
 using TaskSphere.Models;
-    using TaskSphere.Repository.IRepository;
+using TaskSphere.Repository.IRepository;
 
     namespace TaskSphere.Controllers
     {
+        [Authorize]
         [Route("api/[controller]")]
         [ApiController]
         public class TaskController : ControllerBase
         {
             private readonly IUnitOfWork _unitOfWork;
+            private readonly IAuthorizationService _authorizationService;
 
-            public TaskController(IUnitOfWork unitOfWork)
+            public TaskController(IUnitOfWork unitOfWork, IAuthorizationService authorizationService)
             {
                 _unitOfWork = unitOfWork;
+                _authorizationService = authorizationService;
             }
 
             //GetAll
@@ -27,11 +32,12 @@ using TaskSphere.Models;
             {
                 var tasks = await _unitOfWork.Task.GetAllAsync(
                     includeProperties: new Expression<Func<Models.Task, object>>[]
-                                        { task => task.Creator,
-                                            task => task.Assignee,
-                                            task => task.Team,
-                                            task => task.Project
-                                        });
+                    { 
+                        task => task.Creator,
+                        task => task.Assignee,
+                        task => task.Team,
+                        task => task.Project
+                    });
 
                 if (tasks == null) return NotFound();
 
@@ -103,12 +109,20 @@ using TaskSphere.Models;
             {
                 if (!ModelState.IsValid) return BadRequest(ModelState);
 
+                // Get the current user id
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized("User ID not found.");
+                }
+
                 var projectExists = await _unitOfWork.Project.GetAsync(p => p.Id == projectId);
                 if (projectExists == null) return BadRequest();
 
                 var teamExists = await _unitOfWork.Team.GetAsync(t => t.Id == teamId);
                 if (teamExists == null) return BadRequest();
 
+                //create a new task 
                 var task = new Models.Task
                 {
                     Title = createTaskDto.Title,
@@ -116,9 +130,9 @@ using TaskSphere.Models;
                     Status = createTaskDto.Status,
                     DueDate = createTaskDto.DueDate,
                     ImageUrl = createTaskDto.ImageUrl,
-                    ProjectId = projectId, // Assign the ProjectId
-                    CreatorId = 1, // TODO : get the current user id
-                    TeamId = teamId
+                    ProjectId = projectId,
+                    TeamId = teamId,
+                    CreatorId = userId
                 };
 
                 await _unitOfWork.Task.AddAsync(task);
@@ -135,20 +149,32 @@ using TaskSphere.Models;
                 await _unitOfWork.TaskUser.AssignUserToTaskAsync(taskUser);
                 await _unitOfWork.SaveAsync();
 
+            //eager loading
+            var taskDetails = await _unitOfWork.Task.GetAsync(t => t.Id == task.Id,
+                includeProperties: new Expression<Func<Models.Task, object>>[]
+                {
+                        task => task.Creator,
+                        task => task.Assignee,
+                        task => task.Team,
+                        task => task.Project
+                });
+            if (taskDetails == null) return NotFound();
+
+            //return the task
             var taskDto = new TaskDto
                 {
-                    Id = task.Id,
-                    Title = task.Title,
-                    Description = task.Description,
-                    Status = task.Status,
-                    CreatedAt = task.CreatedAt,
-                    DueDate = task.DueDate,
-                    UpdatedAt = task.UpdatedAt,
-                    ImageUrl = task.ImageUrl,
-                    CreatorId = task.CreatorId,
-                    TeamId = task.TeamId,
-                    ProjectId = task.ProjectId,
-                    Assignee = task.Assignee.Select(assignee => new TaskUserDto
+                    Id = taskDetails.Id,
+                    Title = taskDetails.Title,
+                    Description = taskDetails.Description,
+                    Status = taskDetails.Status,
+                    CreatedAt = taskDetails.CreatedAt,
+                    DueDate = taskDetails.DueDate,
+                    UpdatedAt = taskDetails.UpdatedAt,
+                    ImageUrl = taskDetails.ImageUrl,
+                    CreatorId = taskDetails.CreatorId,
+                    TeamId = taskDetails.TeamId,
+                    ProjectId = taskDetails.ProjectId,
+                    Assignee = taskDetails.Assignee.Select(assignee => new TaskUserDto
                     {
                         UserId = assignee.UserId,
                         TaskId = assignee.TaskId,
@@ -160,14 +186,23 @@ using TaskSphere.Models;
             }
 
             //Update a Task
-            [HttpPut("{id}")]
-            public async Task<ActionResult<Models.Task>> UpdateTask(int id, [FromBody] UpdateTaskDto updateTaskDto)
+            [HttpPut("{taskId}")]
+            public async Task<ActionResult<Models.Task>> UpdateTask(int taskId, [FromBody] UpdateTaskDto updateTaskDto)
             {
                 if (!ModelState.IsValid) return BadRequest(ModelState);
 
-                var task = await _unitOfWork.Task.GetAsync(t => t.Id == id);
+            //authorization
+            var authorization = await _authorizationService.AuthorizeAsync(User, null, "Admin");
+            if (!authorization.Succeeded)
+            {
+                return Forbid();
+            }
+
+            //get task
+            var task = await _unitOfWork.Task.GetAsync(t => t.Id == taskId);
                 if (task == null) return NotFound();
 
+                //update the task
                 task.Title = updateTaskDto.Title;
                 task.Description = updateTaskDto.Description;
                 task.Status = updateTaskDto.Status;
@@ -175,20 +210,32 @@ using TaskSphere.Models;
                 task.DueDate = updateTaskDto.DueDate;
                 task.ImageUrl = updateTaskDto.ImageUrl;
 
+                //eager loading
+                var taskDetails = await _unitOfWork.Task.GetAsync(t => t.Id == task.Id,
+                    includeProperties: new Expression<Func<Models.Task, object>>[]
+                    {
+                            task => task.Creator,
+                            task => task.Assignee,
+                            task => task.Team,
+                            task => task.Project
+                    });
+                if (taskDetails == null) return NotFound();
+
+                //return the task
                 var taskDto = new TaskDto
                 {
-                    Id = task.Id,
-                    Title = task.Title,
-                    Description = task.Description,
-                    Status = task.Status,
-                    CreatedAt = task.CreatedAt,
-                    DueDate = task.DueDate,
-                    UpdatedAt = task.UpdatedAt,
-                    ImageUrl = task.ImageUrl,
-                    CreatorId = task.CreatorId,
-                    TeamId = task.TeamId,
-                    ProjectId = task.ProjectId,
-                    Assignee = task.Assignee.Select(assignee => new TaskUserDto
+                    Id = taskDetails.Id,
+                    Title = taskDetails.Title,
+                    Description = taskDetails.Description,
+                    Status = taskDetails.Status,
+                    CreatedAt = taskDetails.CreatedAt,
+                    DueDate = taskDetails.DueDate,
+                    UpdatedAt = taskDetails.UpdatedAt,
+                    ImageUrl = taskDetails.ImageUrl,
+                    CreatorId = taskDetails.CreatorId,
+                    TeamId = taskDetails.TeamId,
+                    ProjectId = taskDetails.ProjectId,
+                    Assignee = taskDetails.Assignee.Select(assignee => new TaskUserDto
                     {
                         UserId = assignee.UserId,
                         TaskId = assignee.TaskId,
@@ -203,11 +250,17 @@ using TaskSphere.Models;
             }
 
             //Delete a Task
-            [HttpDelete("{id}")]
-            public async Task<ActionResult> DeleteTask(int id)
+            [HttpDelete("{taskId}")]
+            public async Task<ActionResult> DeleteTask(int taskId)
             {
-                var taskToBeDeleted = await _unitOfWork.Task.GetAsync(t => t.Id == id);
+                //authorization
+                var authorization = await _authorizationService.AuthorizeAsync(User, null, "Admin");
+                if (!authorization.Succeeded)
+                {
+                    return Forbid();
+                }
 
+                var taskToBeDeleted = await _unitOfWork.Task.GetAsync(t => t.Id == taskId);
                 if (taskToBeDeleted == null)
                     return NotFound();
 
@@ -218,8 +271,12 @@ using TaskSphere.Models;
 
             //Add a assignee to a team
             [HttpPost("assign-task/{taskId}/{userId}")]
-            public async Task<ActionResult> AssignTask(int taskId, int userId)
+            public async Task<ActionResult> AssignTask(int taskId, string userId)
             {
+                //authorization
+                var authorization = await _authorizationService.AuthorizeAsync(User, null, "Admin");
+                if (!authorization.Succeeded) return Forbid();
+
                 var task = await _unitOfWork.Task.GetAsync(t => t.Id == taskId);
                 if (task == null) return NotFound();
 
@@ -241,8 +298,12 @@ using TaskSphere.Models;
 
             //Remove a assignee from a task
             [HttpDelete("remove-assignee/{taskId}/{userId}")]
-            public async Task<ActionResult> RemoveAssignee(int taskId, int userId)
+            public async Task<ActionResult> RemoveAssignee(int taskId, string userId)
             {
+                //authorization
+                var authorization = await _authorizationService.AuthorizeAsync(User, null, "Admin");
+                if (!authorization.Succeeded) return Forbid();
+
                 var task = await _unitOfWork.Task.GetAsync(t => t.Id == taskId);
                 if (task == null) return NotFound("Task Not Found");
 
@@ -255,7 +316,7 @@ using TaskSphere.Models;
                 await _unitOfWork.TaskUser.RemoveUserFromTaskAsync(taskUser);
                 await _unitOfWork.SaveAsync();
 
-            return NoContent();
+                return NoContent();
             }
         }
     }

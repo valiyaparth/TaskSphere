@@ -1,17 +1,19 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.Reflection.Emit;
 using TaskSphere.Models;
 
 namespace TaskSphere.Data
 {
-    public class ApplicationDbContext : DbContext
+    public class ApplicationDbContext : IdentityDbContext<User>
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
         {
 
         }
             public DbSet<Models.Task> Tasks { get; set; }
-            public DbSet<User> Users { get; set; }
+
+            //public DbSet<User> Users { get; set; }
             public DbSet<Team> Teams { get; set; }
             public DbSet<Project> Projects { get; set; }
 
@@ -19,6 +21,8 @@ namespace TaskSphere.Data
             public DbSet<ProjectTeam> ProjectTeams { get; set; }
             public DbSet<TaskUser> TaskUsers { get; set; }
             public DbSet<TeamMember> TeamMembers { get; set; }
+
+            public DbSet<TokenInfo> TokenInfos { get; set; }    
 
 
 

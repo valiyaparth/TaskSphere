@@ -6,7 +6,7 @@ namespace TaskSphere.Models
     {
         //composite key
         public int TeamId { get; set; }
-        public int UserId { get; set; }
+        public string UserId { get; set; }
 
         //navigation properties
         public Team Team { get; set; }

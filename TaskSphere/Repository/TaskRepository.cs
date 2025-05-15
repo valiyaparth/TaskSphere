@@ -1,4 +1,5 @@
-﻿using TaskSphere.Data;
+﻿using Microsoft.EntityFrameworkCore;
+using TaskSphere.Data;
 using TaskSphere.Repository.IRepository;
 
 namespace TaskSphere.Repository
@@ -9,6 +10,11 @@ namespace TaskSphere.Repository
         public TaskRepository(ApplicationDbContext db) : base(db)
         {
             _db = db;
+        }
+
+        public async Task<IEnumerable<Models.Task>> GetProjectTasksAsync(int projectId)
+        {
+            return await _db.Tasks.Where(u => u.ProjectId == projectId).ToListAsync();
         }
 
         public void Update(Models.Task obj)

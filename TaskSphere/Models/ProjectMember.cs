@@ -6,7 +6,7 @@ namespace TaskSphere.Models
     {
         //composite key
         public int ProjectId { get; set; }
-        public int UserId { get; set; }
+        public string UserId { get; set; }
 
         //navigation properties
         public Project Project { get; set; }

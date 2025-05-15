@@ -1,6 +1,12 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Distributed;
 using System.Linq.Expressions;
+using System.Security.Claims;
+using System.Text.Json;
 using TaskSphere.DTOs;
 using TaskSphere.Enums;
 using TaskSphere.Models;
@@ -8,15 +14,20 @@ using TaskSphere.Repository.IRepository;
 
 namespace TaskSphere.Controllers
 {
+    //[Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class ProjectController : ControllerBase
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IAuthorizationService _authorizationService;
+        private readonly IDistributedCache _cache;
 
-        public ProjectController(IUnitOfWork unitOfWork)
+        public ProjectController(IUnitOfWork unitOfWork, IAuthorizationService authorizationService, IDistributedCache cache)
         {
             _unitOfWork = unitOfWork;
+            _authorizationService = authorizationService;
+            _cache = cache;
         }
 
         //GetAll
@@ -31,6 +42,9 @@ namespace TaskSphere.Controllers
                     project => project.Tasks,
                     project => project.Teams
                 });
+
+            if(projects == null) return NotFound();
+
 
             var projectDtos = projects.Select(projects => new ProjectDto
             {
@@ -59,7 +73,6 @@ namespace TaskSphere.Controllers
                     TeamId = task.TeamId
                 }).ToList()
             }).ToList();
-
             return Ok(projectDtos);
         }
 
@@ -67,46 +80,74 @@ namespace TaskSphere.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<ProjectDto>> GetProjectById(int id)
         {
-            var project = await _unitOfWork.Project.GetAsync(p => p.Id == id,
-                includeProperties: new Expression<Func<Project, object>>[]
-                {
-                    project => project.Creator,
-                    project => project.Members,
-                    project => project.Tasks,
-                    project => project.Teams
-                });
-            if (project == null) return NotFound();
-
-            var projectDto = new ProjectDto
+            var cacheKey = $"Project_{id}";
+            Project? project;
+            ProjectDto? projectDto;
+            try
             {
-                Id = project.Id,
-                Name = project.Name,
-                Description = project.Description,
-                CreatedAt = project.CreatedAt,
-                UpdatedAt = project.UpdatedAt,
-                ImageUrl = project.ImageUrl,
-                CreatorId = project.CreatorId,
-                Members = project.Members.Select(member => new ProjectMemberDto
+                var cachedData = await _cache.GetStringAsync(cacheKey);
+                //cache hit
+                if (!string.IsNullOrEmpty(cachedData))
                 {
-                    ProjectId = member.ProjectId,
-                    UserId = member.UserId,
-                    Role = member.Role
-                }).ToList(),
-                Teams = project.Teams.Select(team => new ProjectTeamDto
+                    projectDto = JsonSerializer.Deserialize<ProjectDto>(cachedData);
+                    if (projectDto == null)
+                        _cache.Remove(cacheKey);
+                }
+                //cache miss
+                else
                 {
-                    ProjectId = team.ProjectId,
-                    TeamId = team.TeamId
-                }).ToList(),
-                Tasks = project.Tasks.Select(task => new GetTaskDto
-                {
-                    Id = task.Id,
-                    CreatorId = task.CreatorId,
-                    TeamId = task.TeamId,
-                    ProjectId = task.ProjectId
-                }).ToList()
-            };
+                    project = await _unitOfWork.Project.GetAsync(p => p.Id == id,
+                        includeProperties: new Expression<Func<Project, object>>[]
+                        {
+                            project => project.Creator,
+                            project => project.Members,
+                            project => project.Tasks,
+                            project => project.Teams
+                        });
+                    if (project == null) return NotFound();
 
-            return Ok(projectDto);
+                    projectDto = new ProjectDto
+                    {
+                        Id = project.Id,
+                        Name = project.Name,
+                        Description = project.Description,
+                        CreatedAt = project.CreatedAt,
+                        UpdatedAt = project.UpdatedAt,
+                        ImageUrl = project.ImageUrl,
+                        CreatorId = project.CreatorId,
+                        Members = project.Members.Select(member => new ProjectMemberDto
+                        {
+                            ProjectId = member.ProjectId,
+                            UserId = member.UserId,
+                            Role = member.Role
+                        }).ToList(),
+                        Teams = project.Teams.Select(team => new ProjectTeamDto
+                        {
+                            ProjectId = team.ProjectId,
+                            TeamId = team.TeamId
+                        }).ToList(),
+                        Tasks = project.Tasks.Select(task => new GetTaskDto
+                        {
+                            Id = task.Id,
+                            CreatorId = task.CreatorId,
+                            TeamId = task.TeamId,
+                            ProjectId = task.ProjectId
+                        }).ToList()
+                    };
+
+                    var serializedData = JsonSerializer.Serialize(projectDto);
+
+                    await _cache.SetStringAsync(cacheKey, serializedData, new DistributedCacheEntryOptions
+                    {
+                        SlidingExpiration = TimeSpan.FromMinutes(5)
+                    });
+                }
+                return Ok(projectDto);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while accessing the cache.", details = ex.Message });
+            }
         }
 
         //Add a new Project
@@ -115,12 +156,18 @@ namespace TaskSphere.Controllers
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized("User ID not found.");
+            }
+
             var project = new Project
             {
                 Name = createProjectDto.Name,
                 Description = createProjectDto.Description,
                 ImageUrl = createProjectDto.ImageUrl,
-                CreatorId = 1, //TODO: Get the current user id
+                CreatorId = userId
             };
 
             await _unitOfWork.Project.AddAsync(project);
@@ -133,38 +180,43 @@ namespace TaskSphere.Controllers
                 UserId = project.CreatorId,
                 Role = Roles.Admin,
             };
+
+
             // and adding the creator to project member table
             await _unitOfWork.ProjectMember.AddUserToProjectAsync(projectMember);
             await _unitOfWork.SaveAsync();
 
-            // Retrieve project members
-            var members = await _unitOfWork.ProjectMember
-                .GetProjectMembersAsync(project.Id);
-
-            // Retrive project teams
-            var teams = await _unitOfWork.ProjectTeam.GetProjectTeamAsync(project.Id);
+            var projectDetails = await _unitOfWork.Project.GetAsync(p => p.Id == project.Id,
+                includeProperties: new Expression<Func<Project, object>>[]
+                {
+                    project => project.Creator,
+                    project => project.Members,
+                    project => project.Tasks,
+                    project => project.Teams
+                });
+            if (projectDetails == null) return NotFound();
 
             var projectDto = new ProjectDto
             {
-                Id = project.Id,
-                Name = project.Name,
-                Description = project.Description,
-                CreatedAt = project.CreatedAt,
-                UpdatedAt = project.UpdatedAt,
-                ImageUrl = project.ImageUrl,
-                CreatorId = project.CreatorId,
-                Members = members.Select(member => new ProjectMemberDto
+                Id = projectDetails.Id,
+                Name = projectDetails.Name,
+                Description = projectDetails.Description,
+                CreatedAt = projectDetails.CreatedAt,
+                UpdatedAt = projectDetails.UpdatedAt,
+                ImageUrl = projectDetails.ImageUrl,
+                CreatorId = userId,
+                Members = projectDetails.Members.Select(member => new ProjectMemberDto
                 {
                     ProjectId = member.ProjectId,
                     UserId = member.UserId,
                     Role = member.Role
                 }).ToList(),
-                Teams = teams.Select(team => new ProjectTeamDto
+                Teams = projectDetails.Teams.Select(team => new ProjectTeamDto
                 {
                     ProjectId = team.ProjectId,
                     TeamId = team.TeamId
                 }).ToList(),
-                Tasks = project.Tasks.Select(task => new GetTaskDto
+                Tasks = projectDetails.Tasks.Select(task => new GetTaskDto
                 {
                     Id = task.Id,
                     CreatorId = task.CreatorId,
@@ -172,19 +224,27 @@ namespace TaskSphere.Controllers
                     ProjectId = task.ProjectId
                 }).ToList()
             };
-
             return CreatedAtAction(nameof(GetProjectById), new { id = project.Id }, projectDto);
         }
 
         //Update a Project
-        [HttpPut("{id}")]
-        public async Task<ActionResult<Project>> UpdateProject(int id, [FromBody] UpdateProjectDto updateProjectDto)
+        [HttpPut("{projectId}")]
+        public async Task<ActionResult<Project>> UpdateProject(int projectId, [FromBody] UpdateProjectDto updateProjectDto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            var project = await _unitOfWork.Project.GetAsync(t => t.Id == id);
+            //authorization
+            var authorization = await _authorizationService.AuthorizeAsync(User, null, "Admin");
+            if(!authorization.Succeeded)
+            {
+                return Forbid();
+            }
+
+            //get project
+            var project = await _unitOfWork.Project.GetAsync(t => t.Id == projectId);
             if (project == null) return NotFound();
 
+            //update project
                 project.Name = updateProjectDto.Name;
                 project.Description = updateProjectDto.Description;
                 project.ImageUrl = updateProjectDto.ImageUrl;
@@ -192,31 +252,39 @@ namespace TaskSphere.Controllers
                 project.CreatedAt = project.CreatedAt;
                 project.UpdatedAt = DateTime.Now;
 
-            // Retrieve project members
-            var members = await _unitOfWork.ProjectMember
-                .GetProjectMembersAsync(project.Id);
+            //eager loading
+            var projectDetails = await _unitOfWork.Project.GetAsync(p => p.Id == project.Id,
+                includeProperties: new Expression<Func<Project, object>>[]
+                {
+                    project => project.Creator,
+                    project => project.Members,
+                    project => project.Tasks,
+                    project => project.Teams
+                });
+            if (projectDetails == null) return NotFound();
 
+            //create project dto to return
             var projectDto = new ProjectDto
             {
-                Id = project.Id,
-                Name = project.Name,
-                Description = project.Description,
-                CreatedAt = project.CreatedAt,
-                UpdatedAt = project.UpdatedAt,
-                ImageUrl = project.ImageUrl,
-                CreatorId = project.CreatorId,
-                Members = members.Select(member => new ProjectMemberDto
+                Id = projectDetails.Id,
+                Name = projectDetails.Name,
+                Description = projectDetails.Description,
+                CreatedAt = projectDetails.CreatedAt,
+                UpdatedAt = projectDetails.UpdatedAt,
+                ImageUrl = projectDetails.ImageUrl,
+                CreatorId = projectDetails.CreatorId,
+                Members = projectDetails.Members.Select(member => new ProjectMemberDto
                 {
                     ProjectId = member.ProjectId,
                     UserId = member.UserId,
                     Role = member.Role
                 }).ToList(),
-                Teams = project.Teams.Select(team => new ProjectTeamDto
+                Teams = projectDetails.Teams.Select(team => new ProjectTeamDto
                 {
                     ProjectId = team.ProjectId,
                     TeamId = team.TeamId
                 }).ToList(),
-                Tasks = project.Tasks.Select(task => new GetTaskDto
+                Tasks = projectDetails.Tasks.Select(task => new GetTaskDto
                 {
                     Id = task.Id,
                     CreatorId = task.CreatorId,
@@ -232,11 +300,18 @@ namespace TaskSphere.Controllers
         }
 
         //Delete a Project
-        [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteProject(int id)
+        [HttpDelete("{projectId}")]
+        public async Task<ActionResult> DeleteProject(int projectId)
         {
-            var projectToBeDeleted = await _unitOfWork.Project.GetAsync(t => t.Id == id);
+            //authorization to check if user is admin of this project or not
+            var authorization = await _authorizationService.AuthorizeAsync(User, null, "Admin");
+            if (!authorization.Succeeded)
+            {
+                return Forbid();
+            }
 
+            //check if project exists
+            var projectToBeDeleted = await _unitOfWork.Project.GetAsync(t => t.Id == projectId);
             if (projectToBeDeleted == null)
                 return NotFound();
 
@@ -245,10 +320,18 @@ namespace TaskSphere.Controllers
             return NoContent();
         }
 
+
         //Add a user to a project
         [HttpPost("add-projectmember/{projectId}/{userId}")]
-        public async Task<ActionResult> AddUserToProject(int projectId, int userId)
+        public async Task<ActionResult> AddUserToProject(int projectId, string userId)
         {
+            //authorization to check if user is admin of this project or not
+            var authorization = await _authorizationService.AuthorizeAsync(User, null, "Admin");
+            if (!authorization.Succeeded)
+            {
+                return Forbid();
+            }
+
             var project = await _unitOfWork.Project.GetAsync(p => p.Id == projectId);
             if (project == null)
                 return NotFound();
@@ -269,8 +352,14 @@ namespace TaskSphere.Controllers
 
         //Remove a user from a project
         [HttpDelete("remove-projectmember/{projectId}/{userId}")]
-        public async Task<ActionResult> RemoveUserFromProject(int projectId, int userId)
+        public async Task<ActionResult> RemoveUserFromProject(int projectId, string userId)
         {
+            //authorization to check if user is admin of this project or not
+            var authorization = await _authorizationService.AuthorizeAsync(User, null, "Admin");
+            if (!authorization.Succeeded)
+            {
+                return Forbid();
+            }
             var project = await _unitOfWork.Project.GetAsync(p => p.Id == projectId);
             if (project == null)
                 return NotFound();
@@ -289,6 +378,12 @@ namespace TaskSphere.Controllers
         [HttpPost("add-team/{projectId}/{teamId}")]
         public async Task<ActionResult> AddTeamToProject(int projectId, int teamId)
         {
+            //authorization to check if user is admin of this project or not
+            var authorization = await _authorizationService.AuthorizeAsync(User, null, "Admin");
+            if (!authorization.Succeeded)
+            {
+                return Forbid();
+            }
             var project = await _unitOfWork.Project.GetAsync(p => p.Id == projectId);
             if (project == null)
                 return NotFound();
@@ -309,6 +404,12 @@ namespace TaskSphere.Controllers
         [HttpDelete("remove-team/{projectId}/{teamId}")]
         public async Task<ActionResult> RemoveTeamFromProject(int projectId, int teamId)
         {
+            //authorization to check if user is admin of this project or not
+            var authorization = await _authorizationService.AuthorizeAsync(User, null, "Admin");
+            if (!authorization.Succeeded)
+            {
+                return Forbid();
+            }
             var project = await _unitOfWork.Project.GetAsync(p => p.Id == projectId);
             if (project == null)
                 return NotFound();

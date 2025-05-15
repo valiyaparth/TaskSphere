@@ -10,13 +10,13 @@ namespace TaskSphere.Models
         public string Description { get; set; }
         public Status Status { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
-        public DateOnly DueDate { get; set; }
+        public DateTime DueDate { get; set; }
         public DateTime UpdatedAt { get; set; }
         public string? ImageUrl { get; set; }
 
 
         //Foreign keys
-        public int CreatorId { get; set; }
+        public string CreatorId { get; set; }
         public int TeamId { get; set; }
         public int ProjectId { get; set; }  
 

@@ -1,4 +1,6 @@
-﻿using TaskSphere.Data;
+﻿using Microsoft.AspNetCore.Identity;
+using TaskSphere.Data;
+using TaskSphere.Models;
 using TaskSphere.Repository.IRepository;
 
 namespace TaskSphere.Repository
@@ -6,6 +8,7 @@ namespace TaskSphere.Repository
     public class UnitOfWork : IUnitOfWork
     {
         private ApplicationDbContext _db;
+        private UserManager<User> _userManager;
 
         public ITaskRepository Task { get; private set; }
         public IUserRepository User { get; private set; }
@@ -17,11 +20,15 @@ namespace TaskSphere.Repository
         public IProjectTeamRepository ProjectTeam { get; private set; }
         public ITeamMemberRepository TeamMember { get; private set; }
 
-        public UnitOfWork(ApplicationDbContext db) 
+        public ITokenInfoRepository TokenInfo { get; private set; }
+
+        public UnitOfWork(ApplicationDbContext db, UserManager<User> userManager) 
         {
             _db = db;
+            _userManager = userManager;
+
             Task = new TaskRepository(_db);
-            User = new UserRepository(_db);
+            User = new UserRepository(_db, _userManager);
             Project = new ProjectRepository(_db);
             Team = new TeamRepository(_db);
 
@@ -30,9 +37,11 @@ namespace TaskSphere.Repository
             ProjectMember = new ProjectMemberRepository(_db);
             ProjectTeam = new ProjectTeamRepository(_db);
 
+            TokenInfo = new TokenInfoRepository(_db);
+
         }
 
-        public async Task SaveAsync()
+        public async System.Threading.Tasks.Task SaveAsync()
         {
             await _db.SaveChangesAsync();
         }

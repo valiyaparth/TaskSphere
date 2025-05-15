@@ -11,7 +11,7 @@
 
 
         //Foreign key
-        public int CreatorId { get; set; }
+        public string CreatorId { get; set; }
 
         //navigation properties
         public User Creator { get; set; }

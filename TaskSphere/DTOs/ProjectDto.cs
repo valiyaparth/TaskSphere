@@ -8,11 +8,11 @@
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public string? ImageUrl { get; set; }
-        public int CreatorId { get; set; }
+        public string CreatorId { get; set; }
 
-        public List<ProjectMemberDto> Members { get; set; } = new();
-        public List<ProjectTeamDto> Teams { get; set; } = new();
-        public List<GetTaskDto> Tasks { get; set; } = new();
+        public List<ProjectMemberDto> Members { get; set; } = [];
+        public List<ProjectTeamDto> Teams { get; set; } = [];
+        public List<GetTaskDto> Tasks { get; set; } = [];
     }
 
     public class CreateProjectDto
